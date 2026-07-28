@@ -6,14 +6,15 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M5 complete — there's a live URL now.** All four zones discover
-> each other over Eclipse Cyclone DDS, the M4 fault scenarios all pass (zone
-> kill/restart, a real `tc netem` stale-sensor delay, congestion-with-
-> priority-survival), and as of M5 the whole thing has a
-> **REST/WebSocket/OpenAPI surface on `http://localhost:8282`**
-> (`/docs` for interactive API docs, `/api/zones`, `/api/propulsion`,
-> `/api/diagnostics`, ...) plus a CLI (`tools/mostrider_cli.py`) and
-> API-triggerable fault injection for all three M4 scenarios. See
+> **Status: M6 complete — there's a live dashboard now.** All four zones
+> discover each other over Eclipse Cyclone DDS, the M4 fault scenarios all
+> pass (zone kill/restart, a real `tc netem` stale-sensor delay, congestion-
+> with-priority-survival), and **`http://localhost:8282`** now serves a
+> live React dashboard — real-time speed/torque/SoC/power charts, zone
+> health, a diagnostics log, one-click fault injection for all three M4
+> scenarios, and a benchmark summary panel reading real committed report
+> data — alongside the REST/WebSocket/OpenAPI surface from M5 (`/docs`,
+> `/api/*`) and the CLI (`tools/mostrider_cli.py`). See
 > [Quickstart](#quickstart).
 
 ## What this is
@@ -51,14 +52,20 @@ torque, battery SoC, regen braking) or `body-service` for the door/light
 demo beat.
 
 `telemetry-bridge` and `api-bridge` (M5) put all of that behind a REST/
-WebSocket API on **http://localhost:8282** — try:
+WebSocket API — and as of M6, a live dashboard — on **http://localhost:8282**:
 
 ```bash
+open http://localhost:8282             # the dashboard itself
+open http://localhost:8282/docs        # interactive OpenAPI docs
 curl http://localhost:8282/api/zones
 curl http://localhost:8282/api/propulsion
-open http://localhost:8282/docs        # interactive OpenAPI docs
 python3 tools/mostrider_cli.py zones   # same data via the CLI
 ```
+
+The dashboard shows live zone health, real-time speed/torque/battery/power
+charts, a diagnostics log, and buttons to trigger each M4 fault scenario —
+watch the zone cards, charts, and diagnostics log react in real time when
+you click one.
 
 Try killing a zone mid-run to see discovery react live — via `docker
 compose` directly, or via the API (same effect, either way):
@@ -112,7 +119,7 @@ To reproduce the golden-run benchmark report:
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
 measured, what isn't, and the validity boundary (single-host only, for now).
 
-## Architecture (M5 snapshot)
+## Architecture (M6 snapshot)
 
 ```
 front-zone  --\
@@ -140,6 +147,10 @@ load-generator --SensorBurst (congestion profile only)------>/   snapshot.json
 discovery (ADR-0005). `load-generator`/`propulsion-monitor` only run for
 the congestion scenario (Compose profile `congestion`).
 
+- **Dashboard is React+Vite+TS, served same-origin from `api-bridge`** —
+  no CORS, no second port. uPlot for real-time streaming charts, hand-built
+  bars for the summary panel (per the dataviz skill's actual method, not a
+  reflexive charting-library pick). [ADR-0008](crosscheck/adr/0008-dashboard-architecture.md).
 - **API bridge is split across two languages, deliberately** —
   `telemetry-bridge` (C++) is the only DDS participant; `api-bridge`
   (Python/FastAPI) reads its JSON snapshot and never touches DDS. Why:
@@ -195,8 +206,8 @@ the congestion scenario (Compose profile `congestion`).
 | M3 | ✅ done | energy-service (propulsion+energy drive cycle) and body-service, cross-language verified, executive summaries |
 | M4 | ✅ done | Priority stack (layers 1-2) + all 3 fault scenarios, each independently verified and reported |
 | M5 | ✅ done | telemetry-bridge + api-bridge: REST/WebSocket/OpenAPI on :8282, CLI, mini-diagnostics, API-triggerable fault injection |
-| M6 | next | Dashboard (real-time + summary charting) |
-| M7 | planned | Honest, reproducible benchmarks |
+| M6 | ✅ done | React dashboard on :8282 — real-time charts, zone health, diagnostics log, one-click fault injection, benchmark summary |
+| M7 | next | Honest, reproducible benchmarks |
 | M8 | planned | Crosscheck case study + pitch packaging |
 
 Full milestone detail and what's explicitly cut from v1 (SOME/IP, ROS 2,
