@@ -1,0 +1,16 @@
+// M0 walking-skeleton contract. This is deliberately the smallest possible
+// topic — it exists to prove zone discovery and message delivery across the
+// Docker bridge network, not to model a real vehicle signal. See ADR-0002.
+module mostrider {
+  module v1 {
+
+    @topic
+    @final
+    struct HeartBeat {
+      @key string<64> zone_id;   // e.g. "front-zone", "central"
+      unsigned long long seq;    // monotonically increasing per publisher
+      long long timestamp_ns;    // CLOCK_MONOTONIC at publish time
+    };
+
+  };
+};
