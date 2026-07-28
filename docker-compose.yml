@@ -14,6 +14,10 @@ x-zone-defaults: &zone-defaults
     - most-rider
   depends_on:
     - central
+  # NET_ADMIN is required for tools/inject_network_fault.sh's `tc netem`
+  # calls (M4 stale/delayed-sensor scenario, ADR-0006) — not used otherwise.
+  cap_add:
+    - NET_ADMIN
 
 services:
   central:
@@ -25,8 +29,20 @@ services:
     container_name: most-rider-central
     volumes:
       - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+      # Present unconditionally: harmless when RECORD_PATH is unset (the
+      # default demo), and needed directly by tools/run_scenario_stale_sensor.sh
+      # as well as the M1 golden-run overlay — one mount, not duplicated
+      # across compose files.
+      - ./benchmarks/runs:/data
     environment:
       CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      # Empty by default (SampleRecorder stays inactive — normal demo
+      # behavior unchanged). tools/run_golden_benchmark.sh overrides these
+      # via the docker-compose.benchmark.yml overlay;
+      # tools/run_scenario_stale_sensor.sh sets them directly as shell env
+      # vars against this base file.
+      RECORD_PATH: "${RECORD_PATH:-}"
+      RECORD_DURATION_S: "${RECORD_DURATION_S:-0}"
     networks:
       - most-rider
 
@@ -74,7 +90,15 @@ services:
     environment:
       CYCLONEDDS_URI: file:///etc/cyclonedds.xml
       SERVICE_ID: energy-service
-      PUBLISH_PERIOD_MS: "100"
+      # Default 100ms matches a realistic vehicle-signal cadence for the
+      # normal demo. tools/run_scenario_congestion.sh overrides this to a
+      # faster probe rate so a 30s phase yields enough samples for stable
+      # p99 estimates — see that script's comments and benchmarks/methodology.md.
+      PUBLISH_PERIOD_MS: "${CONGESTION_PUBLISH_PERIOD_MS:-100}"
+      # M4 (ADR-0006): toggles PropulsionState between the priority QoS
+      # class and the same best-effort class as the SensorBurst flood, so
+      # tools/run_scenario_congestion.sh can A/B the identical code path.
+      ENABLE_PRIORITY_QOS: "${ENABLE_PRIORITY_QOS:-true}"
     networks:
       - most-rider
 
@@ -91,6 +115,46 @@ services:
       CYCLONEDDS_URI: file:///etc/cyclonedds.xml
       SERVICE_ID: body-service
       PUBLISH_PERIOD_MS: "200"
+    networks:
+      - most-rider
+
+  # M4 (ADR-0006): the congestion-with-priority-survival scenario's flood
+  # source and measurement instrument. Not started by `docker compose up`
+  # (profile-gated) — tools/run_scenario_congestion.sh starts them by name.
+  load-generator:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: load-generator
+    container_name: most-rider-load-generator
+    profiles: ["congestion"]
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      SOURCE_ID: load-generator
+      RATE_HZ: "${LOAD_RATE_HZ:-500}"
+      PAYLOAD_BYTES: "${LOAD_PAYLOAD_BYTES:-2048}"
+    networks:
+      - most-rider
+
+  propulsion-monitor:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: propulsion-monitor
+    container_name: most-rider-propulsion-monitor
+    profiles: ["congestion"]
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+      - ./benchmarks/runs:/data
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      ENABLE_PRIORITY_QOS: "${ENABLE_PRIORITY_QOS:-true}"
+      RECORD_PATH: /data/${CONGESTION_RUN_FILE:-congestion-run.jsonl}
+      RECORD_DURATION_S: "${CONGESTION_RUN_DURATION_S:-30}"
     networks:
       - most-rider
 

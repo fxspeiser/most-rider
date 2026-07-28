@@ -3,12 +3,14 @@
 # -running demo — this overlay is what makes central capture samples and
 # auto-exit after a fixed window. Invoked by tools/run_golden_benchmark.sh:
 #   docker compose -f docker-compose.yml -f docker-compose.benchmark.yml up
+#
+# The /data volume itself lives on central's base definition in
+# docker-compose.yml (needed unconditionally by tools/run_scenario_stale_sensor.sh
+# too) — this overlay only supplies the golden-run-specific env vars.
 name: most-rider
 
 services:
   central:
-    volumes:
-      - ./benchmarks/runs:/data
     environment:
       RECORD_PATH: /data/${GOLDEN_RUN_FILE:-golden-run-1.jsonl}
       RECORD_DURATION_S: "${GOLDEN_RUN_DURATION_S:-30}"

@@ -25,6 +25,8 @@
         <Peer Address="central" />
         <Peer Address="energy-service" />
         <Peer Address="body-service" />
+        <Peer Address="load-generator" />
+        <Peer Address="propulsion-monitor" />
       </Peers>
     </Discovery>
   </Domain>

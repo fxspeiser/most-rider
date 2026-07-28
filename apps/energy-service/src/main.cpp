@@ -25,6 +25,7 @@
 #include "dds/dds.h"
 #include "vehicle.h"
 #include "middleware/dds/dds_entity.hpp"
+#include "middleware/qos/propulsion_qos.hpp"
 
 using mostrider::dds::Entity;
 
@@ -78,17 +79,19 @@ int main() {
 
     Entity participant(dds_create_participant(DDS_DOMAIN_DEFAULT, nullptr, nullptr));
 
+    auto prop_qos = mostrider::qos::make_propulsion_qos();
     Entity prop_topic(dds_create_topic(
         participant, &mostrider_v1_PropulsionState_desc, "PropulsionState", nullptr, nullptr));
-    Entity prop_writer(dds_create_writer(participant, prop_topic, nullptr, nullptr));
+    Entity prop_writer(dds_create_writer(participant, prop_topic, prop_qos, nullptr));
 
     Entity energy_topic(dds_create_topic(
         participant, &mostrider_v1_EnergyState_desc, "EnergyState", nullptr, nullptr));
     Entity energy_writer(dds_create_writer(participant, energy_topic, nullptr, nullptr));
 
     std::printf(
-        "[%s] up (CYCLONEDDS_URI=%s, period=%dms, cycle_period=%.0fs)\n",
-        service_id, env_or("CYCLONEDDS_URI", "(default)"), period_ms, kCyclePeriodS);
+        "[%s] up (CYCLONEDDS_URI=%s, period=%dms, cycle_period=%.0fs, priority_qos=%s)\n",
+        service_id, env_or("CYCLONEDDS_URI", "(default)"), period_ms, kCyclePeriodS,
+        mostrider::qos::priority_qos_enabled() ? "on" : "off");
     std::fflush(stdout);
 
     const long long start_ns = monotonic_ns();

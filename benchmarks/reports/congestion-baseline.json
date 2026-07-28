@@ -1,0 +1,32 @@
+{
+  "run_id": "congestion-baseline",
+  "source": "benchmarks/runs/congestion-baseline.jsonl",
+  "stats": {
+    "count": 1425,
+    "min_us": 22,
+    "max_us": 8474,
+    "mean_us": 111.3,
+    "stddev_us": 260.6,
+    "p50_us": 88.0,
+    "p90_us": 158.6,
+    "p95_us": 227.8,
+    "p99_us": 498.1,
+    "p999_us": 3059.5
+  },
+  "per_zone_counts": {
+    "energy-service": 1425
+  },
+  "environment": {
+    "captured_at_utc": "2026-07-28T15:06:55.016315+00:00",
+    "orchestrating_host_platform": "macOS-26.5.2-x86_64-i386-64bit",
+    "orchestrating_host_machine": "x86_64",
+    "python_version": "3.10.10",
+    "docker_version": "Docker version 20.10.18, build b40c2f6b5d",
+    "docker_compose_version": "Docker Compose version v5.1.4",
+    "docker_daemon_architecture": "aarch64",
+    "docker_daemon_os": "linux / Docker Desktop",
+    "docker_daemon_cpus": "15",
+    "cyclonedds_version": "0.10.4 (Ubuntu 24.04 apt package, see deploy/Dockerfile)",
+    "measurement_note": "Single Docker host; latency is (central's CLOCK_MONOTONIC at receipt) minus (publisher's CLOCK_MONOTONIC at send). Valid because containers on one host share the kernel's monotonic clock (ADR-0002) - NOT valid across two physical hosts without PTP or an RTT methodology."
+  }
+}

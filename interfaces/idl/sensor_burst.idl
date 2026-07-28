@@ -1,0 +1,19 @@
+// M4: the deliberately low-priority "flood" topic used by load-generator
+// to congest the bus for the congestion-with-priority-survival scenario
+// (ADR-0006). Bulk, best-effort, shallow-history by design — this is the
+// traffic class propulsion must survive being drowned out by, not a real
+// sensor.
+module mostrider {
+  module v1 {
+
+    @topic
+    @final
+    struct SensorBurst {
+      @key string<64> source_id;
+      sequence<octet, 4096> payload;
+      unsigned long long seq;
+      long long timestamp_ns;
+    };
+
+  };
+};

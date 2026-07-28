@@ -20,8 +20,11 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 
 FROM ubuntu:24.04 AS runtime
 
+# iproute2 provides `tc`, used by tools/inject_network_fault.sh for the M4
+# stale/delayed-sensor scenario (ADR-0006) — only zone containers actually
+# need NET_ADMIN capability to use it, but the image is shared (ADR-0001).
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-    libddsc0t64 \
+    libddsc0t64 iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 ARG TARGET
