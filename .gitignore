@@ -27,6 +27,10 @@ venv/
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
+# copied from design/tokens.css by predev/prebuild (ADR-0008) — the
+# canonical source stays design/tokens.css, not this generated copy
+apps/dashboard/src/tokens.css
 
 # OS cruft
 .DS_Store
