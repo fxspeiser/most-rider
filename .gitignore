@@ -13,6 +13,10 @@ interfaces/generated/*.c
 interfaces/generated/*.h
 !interfaces/generated/.gitkeep
 
+# raw benchmark sample dumps (regenerable; the report under
+# benchmarks/reports/ is the committed evidence, not the raw capture)
+benchmarks/runs/*.jsonl
+
 # Python
 __pycache__/
 *.pyc

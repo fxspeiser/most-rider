@@ -1,10 +1,15 @@
-// M0 walking skeleton: central subscriber.
+// Central subscriber (M0 walking skeleton, extended in M1 with golden-run
+// recording).
 //
 // Waits on incoming HeartBeat samples from any zone and logs one-way
 // latency using CLOCK_MONOTONIC. Containers on the same Docker host share
 // the kernel's monotonic clock, so this comparison is valid for a
 // single-host demo (see ADR-0002 and crosscheck/adr for the citation) —
 // it stops being valid the moment a second physical host enters the demo.
+//
+// Set RECORD_PATH to capture raw (zone, seq, latency_us) samples as JSONL
+// for tools/analyze_run.py, and RECORD_DURATION_S to auto-exit after a
+// fixed window — this is what tools/run_golden_benchmark.sh drives.
 
 #include <cstdio>
 #include <cstdlib>
@@ -15,8 +20,10 @@
 #include "dds/dds.h"
 #include "heartbeat.h"
 #include "middleware/dds/dds_entity.hpp"
+#include "middleware/metrics/sample_recorder.hpp"
 
 using mostrider::dds::Entity;
+using mostrider::metrics::SampleRecorder;
 
 namespace {
 
@@ -46,8 +53,14 @@ int main() {
         return 1;
     }
 
+    SampleRecorder recorder(env_or("RECORD_PATH", ""));
+    const long long duration_s = std::atoll(env_or("RECORD_DURATION_S", "0"));
+
     std::printf(
-        "central: subscriber up (CYCLONEDDS_URI=%s)\n", env_or("CYCLONEDDS_URI", "(default)"));
+        "central: subscriber up (CYCLONEDDS_URI=%s, recording=%s, duration_s=%lld)\n",
+        env_or("CYCLONEDDS_URI", "(default)"),
+        recorder.active() ? env_or("RECORD_PATH", "") : "off",
+        duration_s);
     std::fflush(stdout);
 
     void* samples[8] = {};
@@ -57,7 +70,16 @@ int main() {
         s = &storage[&s - samples];
     }
 
+    const long long run_start_ns = monotonic_ns();
+    unsigned long long recorded_count = 0;
+
     while (true) {
+        if (duration_s > 0 && (monotonic_ns() - run_start_ns) >= duration_s * 1'000'000'000LL) {
+            std::printf("central: golden run complete, recorded %llu samples\n", recorded_count);
+            std::fflush(stdout);
+            return 0;
+        }
+
         dds_return_t nready = dds_waitset_wait(waitset, nullptr, 0, DDS_SECS(5));
         if (nready == 0) {
             std::printf("central: no heartbeats in the last 5s\n");
@@ -75,6 +97,11 @@ int main() {
             std::printf(
                 "central: received heartbeat zone=%s seq=%llu latency_us=%lld\n",
                 hb->zone_id, static_cast<unsigned long long>(hb->seq), latency_us);
+
+            if (recorder.active()) {
+                recorder.record(hb->zone_id, hb->seq, latency_us);
+                ++recorded_count;
+            }
         }
         std::fflush(stdout);
     }

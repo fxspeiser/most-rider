@@ -6,10 +6,12 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M0 complete.** Two zones (`front-zone`, `central`) discover each
+> **Status: M1 complete.** Two zones (`front-zone`, `central`) discover each
 > other over Eclipse Cyclone DDS across a Docker bridge network and exchange
-> heartbeats — no multicast, no manual steps, one command. See
-> [Quickstart](#quickstart).
+> heartbeats — no multicast, no manual steps, one command. Golden Run #1 is
+> in: **p50 123us / p99 320us / p99.9 675us**, single Docker host, n=146 —
+> see [`benchmarks/reports/golden-run-1.md`](benchmarks/reports/golden-run-1.md)
+> for the full disclosure. See [Quickstart](#quickstart).
 
 ## What this is
 
@@ -41,6 +43,15 @@ To validate the whole thing non-interactively (this is what CI runs):
 ./tools/smoke-test.sh
 ```
 
+To reproduce the golden-run benchmark report:
+
+```bash
+./tools/run_golden_benchmark.sh golden-run-2
+```
+
+See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
+measured, what isn't, and the validity boundary (single-host only, for now).
+
 ## Architecture (M0 snapshot)
 
 ```
@@ -63,8 +74,8 @@ front-zone  --HeartBeat (DDS)-->  central
 | Milestone | Status | Delivers |
 |---|---|---|
 | M0 | ✅ done | Repo skeleton, Crosscheck provenance layer, 2-zone DDS walking skeleton |
-| M1 | next | 4th zone deferred; frozen IDL for real signals, HDR-histogram latency pipeline, golden run |
-| M2 | planned | Full front/rear/cabin/central topology, discovery module, diagnostics |
+| M1 | ✅ done | Raw-sample latency pipeline, benchmark methodology + honesty rules, Golden Run #1 committed |
+| M2 | next | Full front/rear/cabin/central topology, discovery module, diagnostics |
 | M3 | planned | Powertrain/energy service, body control |
 | M4 | planned | Priority stack + all 3 fault scenarios (incl. the congestion-survival centerpiece) |
 | M5 | planned | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
