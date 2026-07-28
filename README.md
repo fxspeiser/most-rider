@@ -6,14 +6,17 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M2 complete.** All four zones (`front-zone`, `rear-zone`,
+> **Status: M3 complete.** All four zones (`front-zone`, `rear-zone`,
 > `cabin-zone`, `central`) discover each other over Eclipse Cyclone DDS
-> across a Docker bridge network — no multicast, no manual steps, one
-> command. Central's discovery module tracks per-zone liveliness and
-> republishes topology + diagnostic events; killing and restarting a zone
-> mid-run is verified end-to-end by `tools/smoke-test.sh`. Golden Run #1 is
-> in: **p50 123us / p99 320us / p99.9 675us**, single Docker host, n=146 —
-> see [`benchmarks/reports/golden-run-1.md`](benchmarks/reports/golden-run-1.md)
+> across a Docker bridge network, and two vehicle-domain services now ride
+> the same bus: `energy-service` (a deterministic powertrain/energy drive
+> cycle) and `body-service` (the "door open → cabin light" demo beat).
+> Killing and restarting a zone mid-run is verified end-to-end by
+> `tools/smoke-test.sh`; the drive cycle is verified against an independent
+> Python re-derivation of its own formula by `tools/verify_m3_services.sh`
+> (922/922 samples matched). Golden Run #1 is in: **p50 123us / p99 320us /
+> p99.9 675us**, single Docker host, n=146 — see
+> [`benchmarks/reports/golden-run-1.md`](benchmarks/reports/golden-run-1.md)
 > for the full disclosure. See [Quickstart](#quickstart).
 
 ## What this is
@@ -44,6 +47,12 @@ heartbeats with one-way latency, capability announcements, and
 `[info]`/`[warning]` transitions whenever a zone goes stale or recovers.
 Tear down with `docker compose down`.
 
+Two more containers, `energy-service` and `body-service`, run the M3
+vehicle-domain simulation independently of the zone topology above — watch
+`docker compose logs -f energy-service` for a live drive cycle (speed,
+torque, battery SoC, regen braking) or `body-service` for the door/light
+demo beat.
+
 Try killing a zone mid-run to see discovery react live:
 
 ```bash
@@ -54,7 +63,8 @@ docker compose start rear-zone  # central logs "[info] rear-zone recovered"
 To validate the whole thing non-interactively (this is what CI runs):
 
 ```bash
-./tools/smoke-test.sh
+./tools/smoke-test.sh              # M0-M2: discovery, kill/restart
+./tools/verify_m3_services.sh      # M3: drive-cycle correctness, cross-checked in Python
 ```
 
 To reproduce the golden-run benchmark report:
@@ -66,7 +76,7 @@ To reproduce the golden-run benchmark report:
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
 measured, what isn't, and the validity boundary (single-host only, for now).
 
-## Architecture (M2 snapshot)
+## Architecture (M3 snapshot)
 
 ```
 front-zone  --\
@@ -78,7 +88,14 @@ cabin-zone  --/                                              |
                                                               |
                                               TopologyState + DiagnosticEvent
                                                     (republished, keyed per zone)
+
+energy-service  --PropulsionState + EnergyState (DDS)-->  (unconsumed until M6)
+body-service    --BodyState (DDS)-->                       (unconsumed until M6)
 ```
+
+`energy-service`/`body-service` are services, not zones — no heartbeat, not
+yet tracked by discovery (ADR-0005). Nothing subscribes to their topics yet;
+that's M6's dashboard.
 
 - **Transport:** Eclipse Cyclone DDS, C API, C++20 zone runtime.
   Why, and what was rejected: [ADR-0001](crosscheck/adr/0001-transport-selection.md).
@@ -90,12 +107,19 @@ cabin-zone  --/                                              |
   hosts the discovery module rather than being "one more zone"
   ([ADR-0004](crosscheck/adr/0004-discovery-data-model.md)).
 - **Contracts:** [`interfaces/idl/heartbeat.idl`](interfaces/idl/heartbeat.idl),
-  [`interfaces/idl/discovery.idl`](interfaces/idl/discovery.idl) — frozen and
+  [`interfaces/idl/discovery.idl`](interfaces/idl/discovery.idl),
+  [`interfaces/idl/vehicle.idl`](interfaces/idl/vehicle.idl) — frozen and
   code-generated at build time, nothing hand-written against them is
   committed.
 - **Liveliness is app-level for now** (`middleware/health/zone_registry.hpp`),
   not DDS liveliness QoS — deliberately deferred to M4, where it's one layer
   of the priority stack, not duplicated here (ADR-0004).
+- **The drive cycle is analytic, not integrated** — speed is a direct
+  formula, torque is its exact derivative, so it's exactly reproducible and
+  independently re-derivable for verification. Why, and what's tuned vs.
+  physically meaningful: [ADR-0005](crosscheck/adr/0005-drive-cycle-model.md).
+  Per-service executive summaries: [`services/propulsion/`](services/propulsion/README.md),
+  [`services/energy/`](services/energy/README.md), [`services/body/`](services/body/README.md).
 
 ## Roadmap
 
@@ -104,8 +128,8 @@ cabin-zone  --/                                              |
 | M0 | ✅ done | Repo skeleton, Crosscheck provenance layer, 2-zone DDS walking skeleton |
 | M1 | ✅ done | Raw-sample latency pipeline, benchmark methodology + honesty rules, Golden Run #1 committed |
 | M2 | ✅ done | Full front/rear/cabin/central topology, discovery module (ZoneRegistry), TopologyState/DiagnosticEvent, kill/restart verified |
-| M3 | next | Powertrain/energy service, body control |
-| M4 | planned | Priority stack + all 3 fault scenarios (incl. the congestion-survival centerpiece) |
+| M3 | ✅ done | energy-service (propulsion+energy drive cycle) and body-service, cross-language verified, executive summaries |
+| M4 | next | Priority stack + all 3 fault scenarios (incl. the congestion-survival centerpiece) |
 | M5 | planned | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
 | M6 | planned | Dashboard (real-time + summary charting) |
 | M7 | planned | Honest, reproducible benchmarks |

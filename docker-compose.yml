@@ -57,6 +57,43 @@ services:
       CAPABILITIES: body,sensors
       PUBLISH_PERIOD_MS: "500"
 
+  # M3 services (logically hosted by front-zone's propulsion domain and
+  # cabin-zone's body domain respectively; deployed as independent
+  # containers per Docker's one-process-per-container convention — see
+  # ADR-0005). Not zones: no HeartBeat/CapabilityAnnounce, not yet tracked
+  # by central's discovery module.
+  energy-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: energy-service
+    container_name: most-rider-energy-service
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      SERVICE_ID: energy-service
+      PUBLISH_PERIOD_MS: "100"
+    networks:
+      - most-rider
+
+  body-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: body-service
+    container_name: most-rider-body-service
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      SERVICE_ID: body-service
+      PUBLISH_PERIOD_MS: "200"
+    networks:
+      - most-rider
+
 networks:
   most-rider:
     driver: bridge

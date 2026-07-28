@@ -1,0 +1,39 @@
+// M3 vehicle-domain contracts: a deliberately simple, clearly-labeled
+// illustrative model (see ADR-0005), not a validated vehicle dynamics
+// model. Two services ride on the same DDS bus as the M2 zones:
+// energy-service (propulsion + energy domains, combined per ADR-0005) and
+// body-service (the "door open -> cabin light" demo beat).
+module mostrider {
+  module v1 {
+
+    @topic
+    @final
+    struct PropulsionState {
+      @key string<64> zone_id;
+      double vehicle_speed_kmh;
+      double torque_request_nm;
+      double torque_delivered_nm;
+      long long timestamp_ns;
+    };
+
+    @topic
+    @final
+    struct EnergyState {
+      @key string<64> zone_id;
+      double battery_soc_pct;
+      double power_draw_kw;      // positive = consuming, negative = regen charging
+      double range_estimate_km;
+      long long timestamp_ns;
+    };
+
+    @topic
+    @final
+    struct BodyState {
+      @key string<64> zone_id;
+      boolean door_open;
+      boolean headlights_on;
+      long long timestamp_ns;
+    };
+
+  };
+};
