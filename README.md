@@ -6,18 +6,17 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M3 complete.** All four zones (`front-zone`, `rear-zone`,
-> `cabin-zone`, `central`) discover each other over Eclipse Cyclone DDS
-> across a Docker bridge network, and two vehicle-domain services now ride
-> the same bus: `energy-service` (a deterministic powertrain/energy drive
-> cycle) and `body-service` (the "door open → cabin light" demo beat).
-> Killing and restarting a zone mid-run is verified end-to-end by
-> `tools/smoke-test.sh`; the drive cycle is verified against an independent
-> Python re-derivation of its own formula by `tools/verify_m3_services.sh`
-> (922/922 samples matched). Golden Run #1 is in: **p50 123us / p99 320us /
-> p99.9 675us**, single Docker host, n=146 — see
-> [`benchmarks/reports/golden-run-1.md`](benchmarks/reports/golden-run-1.md)
-> for the full disclosure. See [Quickstart](#quickstart).
+> **Status: M4 complete — all three fault scenarios pass.** All four zones
+> discover each other over Eclipse Cyclone DDS across a Docker bridge
+> network, two vehicle-domain services ride the same bus, and the "money
+> milestone" is in: **zone kill/restart** (M2's discovery module),
+> **stale/delayed sensor** (a real `tc netem` 300ms delay on rear-zone
+> measured almost exactly in latency, recovering within 2s of clearing it),
+> and **congestion-with-priority-survival** (PropulsionState's p99 held to
+> 454.8us under a 3000Hz flood with priority QoS on, vs. 839.9us without
+> it — with the far-tail caveat disclosed, not hidden). See
+> [`scenarios/README.md`](scenarios/README.md) for all three, or
+> [Quickstart](#quickstart) to run them yourself.
 
 ## What this is
 
@@ -67,6 +66,16 @@ To validate the whole thing non-interactively (this is what CI runs):
 ./tools/verify_m3_services.sh      # M3: drive-cycle correctness, cross-checked in Python
 ```
 
+To run the M4 fault scenarios yourself (each takes 1-3 minutes):
+
+```bash
+./tools/run_scenario_stale_sensor.sh    # real tc netem delay, measured and recovered
+./tools/run_scenario_congestion.sh      # priority QoS A/B under a sensor-burst flood
+```
+
+See [`scenarios/README.md`](scenarios/README.md) for what each proves and
+why it's built the way it is.
+
 To reproduce the golden-run benchmark report:
 
 ```bash
@@ -76,7 +85,7 @@ To reproduce the golden-run benchmark report:
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
 measured, what isn't, and the validity boundary (single-host only, for now).
 
-## Architecture (M3 snapshot)
+## Architecture (M4 snapshot)
 
 ```
 front-zone  --\
@@ -89,13 +98,26 @@ cabin-zone  --/                                              |
                                               TopologyState + DiagnosticEvent
                                                     (republished, keyed per zone)
 
-energy-service  --PropulsionState + EnergyState (DDS)-->  (unconsumed until M6)
-body-service    --BodyState (DDS)-->                       (unconsumed until M6)
+energy-service  --PropulsionState (priority QoS) + EnergyState (DDS)-->  propulsion-monitor
+body-service    --BodyState (DDS)-->                                      (unconsumed until M6)
+
+load-generator  --SensorBurst (best-effort flood, congestion profile only)-->  (nobody — it's noise)
 ```
 
-`energy-service`/`body-service` are services, not zones — no heartbeat, not
-yet tracked by discovery (ADR-0005). Nothing subscribes to their topics yet;
-that's M6's dashboard.
+`energy-service`/`body-service`/`load-generator`/`propulsion-monitor` are
+services, not zones — no heartbeat, not tracked by discovery (ADR-0005).
+`load-generator`/`propulsion-monitor` only run for the congestion scenario
+(Compose profile `congestion`), not the default `docker compose up`.
+
+- **Priority stack: 2 of 4 layers built, 2 deferred as stretch** —
+  app-level traffic classes + DDS RELIABLE/deadline/liveliness/
+  transport_priority QoS on `PropulsionState`, A/B-verified against a
+  best-effort flood. DSCP+`tc` network-layer enforcement is not built.
+  Full scope and the honest caveat about far-tail latency:
+  [ADR-0006](crosscheck/adr/0006-priority-stack-and-fault-scenarios.md).
+- **Fault scenarios use real mechanisms, not app-level fakes** — `tc netem`
+  for network delay, `docker compose stop`/`start` for zone loss, an actual
+  flood process for congestion. See [`scenarios/README.md`](scenarios/README.md).
 
 - **Transport:** Eclipse Cyclone DDS, C API, C++20 zone runtime.
   Why, and what was rejected: [ADR-0001](crosscheck/adr/0001-transport-selection.md).
@@ -129,8 +151,8 @@ that's M6's dashboard.
 | M1 | ✅ done | Raw-sample latency pipeline, benchmark methodology + honesty rules, Golden Run #1 committed |
 | M2 | ✅ done | Full front/rear/cabin/central topology, discovery module (ZoneRegistry), TopologyState/DiagnosticEvent, kill/restart verified |
 | M3 | ✅ done | energy-service (propulsion+energy drive cycle) and body-service, cross-language verified, executive summaries |
-| M4 | next | Priority stack + all 3 fault scenarios (incl. the congestion-survival centerpiece) |
-| M5 | planned | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
+| M4 | ✅ done | Priority stack (layers 1-2) + all 3 fault scenarios, each independently verified and reported |
+| M5 | next | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
 | M6 | planned | Dashboard (real-time + summary charting) |
 | M7 | planned | Honest, reproducible benchmarks |
 | M8 | planned | Crosscheck case study + pitch packaging |
