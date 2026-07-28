@@ -6,17 +6,15 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M4 complete — all three fault scenarios pass.** All four zones
-> discover each other over Eclipse Cyclone DDS across a Docker bridge
-> network, two vehicle-domain services ride the same bus, and the "money
-> milestone" is in: **zone kill/restart** (M2's discovery module),
-> **stale/delayed sensor** (a real `tc netem` 300ms delay on rear-zone
-> measured almost exactly in latency, recovering within 2s of clearing it),
-> and **congestion-with-priority-survival** (PropulsionState's p99 held to
-> 454.8us under a 3000Hz flood with priority QoS on, vs. 839.9us without
-> it — with the far-tail caveat disclosed, not hidden). See
-> [`scenarios/README.md`](scenarios/README.md) for all three, or
-> [Quickstart](#quickstart) to run them yourself.
+> **Status: M5 complete — there's a live URL now.** All four zones discover
+> each other over Eclipse Cyclone DDS, the M4 fault scenarios all pass (zone
+> kill/restart, a real `tc netem` stale-sensor delay, congestion-with-
+> priority-survival), and as of M5 the whole thing has a
+> **REST/WebSocket/OpenAPI surface on `http://localhost:8282`**
+> (`/docs` for interactive API docs, `/api/zones`, `/api/propulsion`,
+> `/api/diagnostics`, ...) plus a CLI (`tools/mostrider_cli.py`) and
+> API-triggerable fault injection for all three M4 scenarios. See
+> [Quickstart](#quickstart).
 
 ## What this is
 
@@ -52,12 +50,32 @@ vehicle-domain simulation independently of the zone topology above — watch
 torque, battery SoC, regen braking) or `body-service` for the door/light
 demo beat.
 
-Try killing a zone mid-run to see discovery react live:
+`telemetry-bridge` and `api-bridge` (M5) put all of that behind a REST/
+WebSocket API on **http://localhost:8282** — try:
+
+```bash
+curl http://localhost:8282/api/zones
+curl http://localhost:8282/api/propulsion
+open http://localhost:8282/docs        # interactive OpenAPI docs
+python3 tools/mostrider_cli.py zones   # same data via the CLI
+```
+
+Try killing a zone mid-run to see discovery react live — via `docker
+compose` directly, or via the API (same effect, either way):
 
 ```bash
 docker compose stop rear-zone   # central logs "[warning] rear-zone went stale" within ~1s
 docker compose start rear-zone  # central logs "[info] rear-zone recovered"
+
+# or, via the API:
+python3 tools/mostrider_cli.py fault stop-zone rear-zone
+python3 tools/mostrider_cli.py fault start-zone rear-zone
 ```
+
+**Security note:** `api-bridge`'s fault-control endpoints need Docker
+socket access to work — read
+[`docs/architecture/security-limitations.md`](docs/architecture/security-limitations.md)
+before considering exposing port 8282 beyond localhost.
 
 To validate the whole thing non-interactively (this is what CI runs):
 
@@ -73,6 +91,15 @@ To run the M4 fault scenarios yourself (each takes 1-3 minutes):
 ./tools/run_scenario_congestion.sh      # priority QoS A/B under a sensor-burst flood
 ```
 
+Or trigger the same faults ad hoc via the API/CLI once the stack is up:
+
+```bash
+python3 tools/mostrider_cli.py fault inject-delay rear-zone 300
+python3 tools/mostrider_cli.py fault clear-delay rear-zone
+python3 tools/mostrider_cli.py fault congestion start
+python3 tools/mostrider_cli.py fault congestion stop
+```
+
 See [`scenarios/README.md`](scenarios/README.md) for what each proves and
 why it's built the way it is.
 
@@ -85,7 +112,7 @@ To reproduce the golden-run benchmark report:
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
 measured, what isn't, and the validity boundary (single-host only, for now).
 
-## Architecture (M4 snapshot)
+## Architecture (M5 snapshot)
 
 ```
 front-zone  --\
@@ -97,18 +124,31 @@ cabin-zone  --/                                              |
                                                               |
                                               TopologyState + DiagnosticEvent
                                                     (republished, keyed per zone)
-
-energy-service  --PropulsionState (priority QoS) + EnergyState (DDS)-->  propulsion-monitor
-body-service    --BodyState (DDS)-->                                      (unconsumed until M6)
-
-load-generator  --SensorBurst (best-effort flood, congestion profile only)-->  (nobody — it's noise)
+                                                              |
+energy-service --PropulsionState(priority QoS)+EnergyState-->|
+body-service   --BodyState---------------------------------->+-- telemetry-bridge (C++, DDS)
+                                                              |        |
+load-generator --SensorBurst (congestion profile only)------>/   snapshot.json
+                                                                       |
+                                                              api-bridge (Python, FastAPI)
+                                                                       |
+                                                     REST + WebSocket + OpenAPI :8282
 ```
 
-`energy-service`/`body-service`/`load-generator`/`propulsion-monitor` are
-services, not zones — no heartbeat, not tracked by discovery (ADR-0005).
-`load-generator`/`propulsion-monitor` only run for the congestion scenario
-(Compose profile `congestion`), not the default `docker compose up`.
+`energy-service`/`body-service`/`load-generator`/`propulsion-monitor`/
+`telemetry-bridge` are services, not zones — no heartbeat, not tracked by
+discovery (ADR-0005). `load-generator`/`propulsion-monitor` only run for
+the congestion scenario (Compose profile `congestion`).
 
+- **API bridge is split across two languages, deliberately** —
+  `telemetry-bridge` (C++) is the only DDS participant; `api-bridge`
+  (Python/FastAPI) reads its JSON snapshot and never touches DDS. Why:
+  the official `cyclonedds` PyPI package has no `linux/arm64` wheel — a
+  real platform gap found by spiking it, not assumed.
+  [ADR-0007](crosscheck/adr/0007-api-bridge-architecture.md).
+- **Fault-control endpoints need Docker socket access** — read
+  [`docs/architecture/security-limitations.md`](docs/architecture/security-limitations.md)
+  before exposing port 8282 beyond localhost.
 - **Priority stack: 2 of 4 layers built, 2 deferred as stretch** —
   app-level traffic classes + DDS RELIABLE/deadline/liveliness/
   transport_priority QoS on `PropulsionState`, A/B-verified against a
@@ -117,7 +157,8 @@ services, not zones — no heartbeat, not tracked by discovery (ADR-0005).
   [ADR-0006](crosscheck/adr/0006-priority-stack-and-fault-scenarios.md).
 - **Fault scenarios use real mechanisms, not app-level fakes** — `tc netem`
   for network delay, `docker compose stop`/`start` for zone loss, an actual
-  flood process for congestion. See [`scenarios/README.md`](scenarios/README.md).
+  flood process for congestion, all now triggerable via API/CLI too. See
+  [`scenarios/README.md`](scenarios/README.md).
 
 - **Transport:** Eclipse Cyclone DDS, C API, C++20 zone runtime.
   Why, and what was rejected: [ADR-0001](crosscheck/adr/0001-transport-selection.md).
@@ -141,7 +182,8 @@ services, not zones — no heartbeat, not tracked by discovery (ADR-0005).
   independently re-derivable for verification. Why, and what's tuned vs.
   physically meaningful: [ADR-0005](crosscheck/adr/0005-drive-cycle-model.md).
   Per-service executive summaries: [`services/propulsion/`](services/propulsion/README.md),
-  [`services/energy/`](services/energy/README.md), [`services/body/`](services/body/README.md).
+  [`services/energy/`](services/energy/README.md), [`services/body/`](services/body/README.md),
+  [`services/diagnostics/`](services/diagnostics/README.md).
 
 ## Roadmap
 
@@ -152,8 +194,8 @@ services, not zones — no heartbeat, not tracked by discovery (ADR-0005).
 | M2 | ✅ done | Full front/rear/cabin/central topology, discovery module (ZoneRegistry), TopologyState/DiagnosticEvent, kill/restart verified |
 | M3 | ✅ done | energy-service (propulsion+energy drive cycle) and body-service, cross-language verified, executive summaries |
 | M4 | ✅ done | Priority stack (layers 1-2) + all 3 fault scenarios, each independently verified and reported |
-| M5 | next | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
-| M6 | planned | Dashboard (real-time + summary charting) |
+| M5 | ✅ done | telemetry-bridge + api-bridge: REST/WebSocket/OpenAPI on :8282, CLI, mini-diagnostics, API-triggerable fault injection |
+| M6 | next | Dashboard (real-time + summary charting) |
 | M7 | planned | Honest, reproducible benchmarks |
 | M8 | planned | Crosscheck case study + pitch packaging |
 
