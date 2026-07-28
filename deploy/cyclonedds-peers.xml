@@ -27,6 +27,7 @@
         <Peer Address="body-service" />
         <Peer Address="load-generator" />
         <Peer Address="propulsion-monitor" />
+        <Peer Address="telemetry-bridge" />
       </Peers>
     </Discovery>
   </Domain>

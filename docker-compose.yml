@@ -158,6 +158,59 @@ services:
     networks:
       - most-rider
 
+  # M5 (ADR-0007): the DDS-facing half of the API bridge. Subscribes to
+  # everything api-bridge needs and writes an atomic JSON snapshot to the
+  # shared telemetry-data volume. Not a zone: no HeartBeat.
+  telemetry-bridge:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: telemetry-bridge
+    container_name: most-rider-telemetry-bridge
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+      - telemetry-data:/data
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+    networks:
+      - most-rider
+
+  # M5 (ADR-0007): REST/WebSocket/OpenAPI surface, port 8282. Reads
+  # telemetry-bridge's snapshot; never touches DDS itself. Fault-control
+  # endpoints need the Docker socket — see
+  # docs/architecture/security-limitations.md before exposing this
+  # anywhere beyond localhost.
+  api-bridge:
+    build:
+      context: .
+      dockerfile: apps/api-bridge/Dockerfile
+    container_name: most-rider-api-bridge
+    volumes:
+      - telemetry-data:/data:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/workspace:ro
+    environment:
+      SNAPSHOT_PATH: /data/snapshot.json
+      # /workspace is where THIS container reads docker-compose.yml from;
+      # HOST_PROJECT_DIR is the real host path the *daemon* needs when
+      # api-bridge's own `docker compose` calls create bind mounts (e.g.
+      # starting load-generator) — a container-internal path like
+      # /workspace means nothing to the host daemon on the other end of
+      # the socket. ${PWD} is resolved by the host's docker compose at
+      # startup, before this ever reaches the container. See ADR-0007.
+      COMPOSE_PROJECT_DIR: /workspace
+      HOST_PROJECT_DIR: "${PWD}"
+    ports:
+      - "8282:8282"
+    networks:
+      - most-rider
+    depends_on:
+      - telemetry-bridge
+
 networks:
   most-rider:
     driver: bridge
+
+volumes:
+  telemetry-data:
