@@ -1,0 +1,43 @@
+name: most-rider
+
+x-zone-defaults: &zone-defaults
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+  volumes:
+    - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
+  environment:
+    CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+  networks:
+    - most-rider
+
+services:
+  central:
+    <<: *zone-defaults
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: central
+    container_name: most-rider-central
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+
+  front-zone:
+    <<: *zone-defaults
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      args:
+        TARGET: front-zone
+    container_name: most-rider-front-zone
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      ZONE_ID: front-zone
+      PUBLISH_PERIOD_MS: "200"
+    depends_on:
+      - central
+
+networks:
+  most-rider:
+    driver: bridge

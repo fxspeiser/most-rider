@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build zone images
+        run: docker compose build
+
+      - name: Run M0 smoke test (cross-zone DDS discovery + delivery)
+        run: ./tools/smoke-test.sh
+        env:
+          SMOKE_TEST_TIMEOUT_S: "90"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs

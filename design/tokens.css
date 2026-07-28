@@ -1,0 +1,107 @@
+/*
+ * most-rider design tokens.
+ *
+ * RV-inspired (Rivian compass-gold warmth + Volkswagen electric-blue cool),
+ * on a warm charcoal dark theme — palette only, no logos/wordmarks/trade
+ * dress. Validated with the dataviz skill's validate_palette.js against
+ * both surfaces below; see design/colors.md for the full report and the
+ * rationale for every slot. Do not hand-edit a hue without re-running the
+ * validator — CVD-safety here is a property of the *set*, not any one hex.
+ *
+ * Consume by role (--zone-front, --status-good, ...), never by raw hex, so
+ * a future re-step only ever touches this file.
+ */
+
+.viz-root {
+  color-scheme: light;
+
+  /* surfaces */
+  --surface-1: #faf9f6;
+  --page-plane: #f5f3ee;
+
+  /* ink */
+  --text-primary: #16140f;
+  --text-secondary: #55524a;
+  --text-muted: #8b877c;
+  --gridline: #e6e2d8;
+  --baseline: #c7c2b3;
+  --border: rgba(22, 20, 15, 0.10);
+
+  /* categorical: zone identity (fixed order, never cycled) */
+  --brand-accent: #D9A441;  /* compass gold — chrome/CTA/hero accent, not a zone */
+  --zone-front:   #2E86D6;  /* electric blue */
+  --zone-cabin:   #1BAF7A;  /* teal-green */
+  --zone-rear:    #B5482F;  /* rust/warm red-orange */
+  --zone-central: #7A5FD6;  /* violet — "the brain," deliberately distinct */
+
+  /* status (fixed — never re-themed, never reused as a series color) */
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+
+  /* diverging (e.g. latency delta vs baseline) */
+  --diverging-cool: #2E86D6;   /* better than baseline */
+  --diverging-warm: #B5482F;   /* worse than baseline */
+  --diverging-mid:  #efece4;   /* neutral gray midpoint */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+
+    --surface-1: #15130f;
+    --page-plane: #0e0c09;
+
+    --text-primary: #ffffff;
+    --text-secondary: #c9c5b8;
+    --text-muted: #8b877c;
+    --gridline: #2b2823;
+    --baseline: #3a362e;
+    --border: rgba(255, 255, 255, 0.10);
+
+    --brand-accent: #B8791F;
+    --zone-front:   #3D93E8;
+    --zone-cabin:   #12946B;
+    --zone-rear:    #DB5A36;
+    --zone-central: #7A6BD1;
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-serious:  #ec835a;
+    --status-critical: #d03b3b;
+
+    --diverging-cool: #3D93E8;
+    --diverging-warm: #DB5A36;
+    --diverging-mid:  #38352f;
+  }
+}
+
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+
+  --surface-1: #15130f;
+  --page-plane: #0e0c09;
+
+  --text-primary: #ffffff;
+  --text-secondary: #c9c5b8;
+  --text-muted: #8b877c;
+  --gridline: #2b2823;
+  --baseline: #3a362e;
+  --border: rgba(255, 255, 255, 0.10);
+
+  --brand-accent: #B8791F;
+  --zone-front:   #3D93E8;
+  --zone-cabin:   #12946B;
+  --zone-rear:    #DB5A36;
+  --zone-central: #7A6BD1;
+
+  --status-good:     #0ca30c;
+  --status-warning:  #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+
+  --diverging-cool: #3D93E8;
+  --diverging-warm: #DB5A36;
+  --diverging-mid:  #38352f;
+}
