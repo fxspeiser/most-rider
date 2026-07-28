@@ -1,7 +1,8 @@
-# Shared build for all zone-runtime executables (front-zone, central, ...).
-# One image definition, one CycloneDDS version, per ADR-0001's "manifest
-# configured, not bespoke code" decision — the TARGET build arg selects
-# which executable ships in the final layer.
+# Shared build for both executables (zone-runtime, central). One image
+# definition, one CycloneDDS version, per ADR-0001's "manifest configured,
+# not bespoke code" decision — the TARGET build arg selects which
+# executable ships in the final layer. zone-runtime is instantiated once
+# per peripheral zone (front/rear/cabin) via ZONE_ID, not rebuilt per zone.
 FROM ubuntu:24.04 AS builder
 
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \

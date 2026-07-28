@@ -6,9 +6,12 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M1 complete.** Two zones (`front-zone`, `central`) discover each
-> other over Eclipse Cyclone DDS across a Docker bridge network and exchange
-> heartbeats — no multicast, no manual steps, one command. Golden Run #1 is
+> **Status: M2 complete.** All four zones (`front-zone`, `rear-zone`,
+> `cabin-zone`, `central`) discover each other over Eclipse Cyclone DDS
+> across a Docker bridge network — no multicast, no manual steps, one
+> command. Central's discovery module tracks per-zone liveliness and
+> republishes topology + diagnostic events; killing and restarting a zone
+> mid-run is verified end-to-end by `tools/smoke-test.sh`. Golden Run #1 is
 > in: **p50 123us / p99 320us / p99.9 675us**, single Docker host, n=146 —
 > see [`benchmarks/reports/golden-run-1.md`](benchmarks/reports/golden-run-1.md)
 > for the full disclosure. See [Quickstart](#quickstart).
@@ -33,9 +36,20 @@ reproducible — see [Honesty rules](crosscheck/README.md#honesty-rules).
 docker compose up --build
 ```
 
-Two containers start: `central` (subscriber) and `front-zone` (publisher).
-`central`'s logs show received heartbeats with one-way latency in
-microseconds. Tear down with `docker compose down`.
+Four containers start: `central` (the discovery hub) and three peripheral
+zones — `front-zone`, `rear-zone`, `cabin-zone` — all running the same
+`zone-runtime` image, configured only by `ZONE_ID`/`CAPABILITIES`
+environment variables (ADR-0001, ADR-0004). `central`'s logs show received
+heartbeats with one-way latency, capability announcements, and
+`[info]`/`[warning]` transitions whenever a zone goes stale or recovers.
+Tear down with `docker compose down`.
+
+Try killing a zone mid-run to see discovery react live:
+
+```bash
+docker compose stop rear-zone   # central logs "[warning] rear-zone went stale" within ~1s
+docker compose start rear-zone  # central logs "[info] rear-zone recovered"
+```
 
 To validate the whole thing non-interactively (this is what CI runs):
 
@@ -52,12 +66,18 @@ To reproduce the golden-run benchmark report:
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
 measured, what isn't, and the validity boundary (single-host only, for now).
 
-## Architecture (M0 snapshot)
+## Architecture (M2 snapshot)
 
 ```
-front-zone  --HeartBeat (DDS)-->  central
-     \                              /
-      \-- Cyclone DDS, unicast peers (deploy/cyclonedds-peers.xml) --/
+front-zone  --\
+rear-zone   ---+--HeartBeat + CapabilityAnnounce (DDS)-->  central
+cabin-zone  --/                                              |
+                                                    discovery module
+                                                    (ZoneRegistry: app-level
+                                                     staleness tracking)
+                                                              |
+                                              TopologyState + DiagnosticEvent
+                                                    (republished, keyed per zone)
 ```
 
 - **Transport:** Eclipse Cyclone DDS, C API, C++20 zone runtime.
@@ -65,9 +85,17 @@ front-zone  --HeartBeat (DDS)-->  central
 - **Docker networking:** explicit unicast peers, not multicast — the #1
   technical risk every model in the design debate flagged, resolved on
   day one: [ADR-0002](crosscheck/adr/0002-docker-networking-for-dds-discovery.md).
-- **Contract:** [`interfaces/idl/heartbeat.idl`](interfaces/idl/heartbeat.idl),
-  frozen and code-generated at build time — nothing hand-written against it
-  is committed.
+- **One zone binary, not one per zone:** `zone-runtime` is instantiated
+  three times via config; only `central` is architecturally distinct — it
+  hosts the discovery module rather than being "one more zone"
+  ([ADR-0004](crosscheck/adr/0004-discovery-data-model.md)).
+- **Contracts:** [`interfaces/idl/heartbeat.idl`](interfaces/idl/heartbeat.idl),
+  [`interfaces/idl/discovery.idl`](interfaces/idl/discovery.idl) — frozen and
+  code-generated at build time, nothing hand-written against them is
+  committed.
+- **Liveliness is app-level for now** (`middleware/health/zone_registry.hpp`),
+  not DDS liveliness QoS — deliberately deferred to M4, where it's one layer
+  of the priority stack, not duplicated here (ADR-0004).
 
 ## Roadmap
 
@@ -75,8 +103,8 @@ front-zone  --HeartBeat (DDS)-->  central
 |---|---|---|
 | M0 | ✅ done | Repo skeleton, Crosscheck provenance layer, 2-zone DDS walking skeleton |
 | M1 | ✅ done | Raw-sample latency pipeline, benchmark methodology + honesty rules, Golden Run #1 committed |
-| M2 | next | Full front/rear/cabin/central topology, discovery module, diagnostics |
-| M3 | planned | Powertrain/energy service, body control |
+| M2 | ✅ done | Full front/rear/cabin/central topology, discovery module (ZoneRegistry), TopologyState/DiagnosticEvent, kill/restart verified |
+| M3 | next | Powertrain/energy service, body control |
 | M4 | planned | Priority stack + all 3 fault scenarios (incl. the congestion-survival centerpiece) |
 | M5 | planned | REST/OpenAPI/WebSocket/CLI surface, mini-diagnostics |
 | M6 | planned | Dashboard (real-time + summary charting) |

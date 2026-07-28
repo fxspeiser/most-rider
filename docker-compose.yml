@@ -4,39 +4,58 @@ x-zone-defaults: &zone-defaults
   build:
     context: .
     dockerfile: deploy/Dockerfile
+    args:
+      TARGET: zone-runtime
   volumes:
     - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
   environment:
     CYCLONEDDS_URI: file:///etc/cyclonedds.xml
   networks:
     - most-rider
+  depends_on:
+    - central
 
 services:
   central:
-    <<: *zone-defaults
     build:
       context: .
       dockerfile: deploy/Dockerfile
       args:
         TARGET: central
     container_name: most-rider-central
+    volumes:
+      - ./deploy/cyclonedds-peers.xml:/etc/cyclonedds.xml:ro
     environment:
       CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+    networks:
+      - most-rider
 
   front-zone:
     <<: *zone-defaults
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile
-      args:
-        TARGET: front-zone
     container_name: most-rider-front-zone
     environment:
       CYCLONEDDS_URI: file:///etc/cyclonedds.xml
       ZONE_ID: front-zone
+      CAPABILITIES: propulsion,sensors
       PUBLISH_PERIOD_MS: "200"
-    depends_on:
-      - central
+
+  rear-zone:
+    <<: *zone-defaults
+    container_name: most-rider-rear-zone
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      ZONE_ID: rear-zone
+      CAPABILITIES: propulsion,sensors,diagnostics
+      PUBLISH_PERIOD_MS: "200"
+
+  cabin-zone:
+    <<: *zone-defaults
+    container_name: most-rider-cabin-zone
+    environment:
+      CYCLONEDDS_URI: file:///etc/cyclonedds.xml
+      ZONE_ID: cabin-zone
+      CAPABILITIES: body,sensors
+      PUBLISH_PERIOD_MS: "500"
 
 networks:
   most-rider:

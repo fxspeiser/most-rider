@@ -1,0 +1,48 @@
+// M2 discovery & health contracts. Central hosts the discovery module (a
+// module *inside* central, not a standalone broker or process — see
+// ADR-0001 and ADR-0004) that consumes CapabilityAnnounce + HeartBeat and
+// republishes TopologyState + DiagnosticEvent.
+module mostrider {
+  module v1 {
+
+    // Published once at startup (and re-announced periodically, in case
+    // central joins late) by every peripheral zone. Comma-separated tags
+    // rather than an IDL sequence<string> — nothing here needs structured
+    // queries over capabilities yet (YAGNI); revisit if that changes.
+    @topic
+    @final
+    struct CapabilityAnnounce {
+      @key string<64> zone_id;
+      string<256> capabilities;   // e.g. "propulsion,diagnostics"
+      string<32> api_version;
+    };
+
+    // Republished by central's discovery module: one keyed instance per
+    // known zone, updated whenever that zone's alive/stale status changes.
+    // A discovery/dashboard client subscribes to this single topic to see
+    // the whole topology rather than reconstructing it from raw heartbeats.
+    @topic
+    @final
+    struct TopologyState {
+      @key string<64> zone_id;
+      boolean alive;
+      unsigned long long last_seq;
+      long long last_seen_ns;
+    };
+
+    // Emitted by central on any zone alive/stale transition. This is a
+    // lightweight event log, not the full mini-UDS diagnostics service
+    // (that's M5) — it exists so M6's dashboard has something to tail and
+    // so M4's fault scenarios have a machine-checkable signal to assert on.
+    @topic
+    @final
+    struct DiagnosticEvent {
+      @key unsigned long long event_id;
+      string<64> zone_id;
+      string<16> severity;   // "info" | "warning" | "critical"
+      string<256> message;
+      long long timestamp_ns;
+    };
+
+  };
+};

@@ -4,8 +4,8 @@
   unreliable across Docker's default bridge networks. This disables
   multicast and lists every zone's Compose service name as an explicit
   unicast peer instead — resolved through Docker's embedded DNS on the
-  shared `most-rider` network. Add a new <Peer> entry here whenever a zone
-  is added (M2 templates this away once the zone runtime is config-driven).
+  shared `most-rider` network. M2 adds rear-zone and cabin-zone now that
+  the full four-zone topology exists.
 -->
 <CycloneDDS xmlns="https://cdds.io/config">
   <Domain id="any">
@@ -19,6 +19,8 @@
       <ParticipantIndex>auto</ParticipantIndex>
       <Peers>
         <Peer Address="front-zone" />
+        <Peer Address="rear-zone" />
+        <Peer Address="cabin-zone" />
         <Peer Address="central" />
       </Peers>
     </Discovery>
