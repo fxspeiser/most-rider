@@ -47,25 +47,36 @@ reliability claim here is scoped, measured, and reproducible — see
 
 ## Architecture
 
-```
-front-zone  --\
-rear-zone   ---+--HeartBeat + CapabilityAnnounce (DDS)-->  central
-cabin-zone  --/                                              |
-                                                    discovery module
-                                                    (ZoneRegistry: app-level
-                                                     staleness tracking)
-                                                              |
-                                              TopologyState + DiagnosticEvent
-                                                    (republished, keyed per zone)
-                                                              |
-energy-service --PropulsionState(priority QoS)+EnergyState-->|
-body-service   --BodyState---------------------------------->+-- telemetry-bridge (C++, DDS)
-                                                              |        |
-load-generator --SensorBurst (congestion profile only)------>/   snapshot.json
-                                                                       |
-                                                              api-bridge (Python, FastAPI)
-                                                                       |
-                                                     REST + WebSocket + OpenAPI :8282
+```mermaid
+flowchart TD
+    FZ["front-zone"] -- "HeartBeat +<br/>CapabilityAnnounce" --> C
+    RZ["rear-zone"] -- "HeartBeat +<br/>CapabilityAnnounce" --> C
+    CZ["cabin-zone"] -- "HeartBeat +<br/>CapabilityAnnounce" --> C
+
+    C["central<br/><b>discovery module</b><br/>(ZoneRegistry: app-level<br/>staleness tracking)"]
+
+    C -- "TopologyState +<br/>DiagnosticEvent" --> TB
+    ES["energy-service"] -- "PropulsionState<br/>(priority QoS) +<br/>EnergyState" --> TB
+    BS["body-service"] -- "BodyState" --> TB
+    LG["load-generator<br/><i>(congestion profile only)</i>"] -- "SensorBurst" --> TB
+
+    TB["telemetry-bridge<br/>(C++ — the only<br/>DDS participant)"] --> SNAP[("snapshot.json")]
+    SNAP --> AB["api-bridge<br/>(Python, FastAPI)"]
+    AB --> API(["REST + WebSocket + OpenAPI<br/>:8282"])
+
+    classDef zone fill:#3D93E8,color:#fff,stroke:#2E86D6,stroke-width:1px
+    classDef central fill:#7A6BD1,color:#fff,stroke:#5f4fb0,stroke-width:1px
+    classDef service fill:#12946B,color:#fff,stroke:#0d7050,stroke-width:1px
+    classDef bridge fill:#DB5A36,color:#fff,stroke:#b8452a,stroke-width:1px
+    classDef api fill:#B8791F,color:#fff,stroke:#96610a,stroke-width:1px
+    classDef store fill:#e6e2d8,color:#16140f,stroke:#8b877c,stroke-width:1px
+
+    class FZ,RZ,CZ zone
+    class C central
+    class ES,BS,LG service
+    class TB bridge
+    class SNAP store
+    class AB,API api
 ```
 
 `energy-service`/`body-service`/`load-generator`/`propulsion-monitor`/
