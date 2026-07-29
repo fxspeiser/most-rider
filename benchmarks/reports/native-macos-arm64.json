@@ -1,0 +1,28 @@
+{
+  "run_id": "native-macos-arm64",
+  "source": "benchmarks/runs/native-macos-arm64.jsonl",
+  "stats": {
+    "count": 278,
+    "min_us": 73,
+    "max_us": 963,
+    "mean_us": 164.6,
+    "stddev_us": 58.2,
+    "p50_us": 156.0,
+    "p90_us": 200.0,
+    "p95_us": 225.1,
+    "p99_us": 295.5,
+    "p999_us": 805.4
+  },
+  "per_zone_counts": {
+    "front-zone": 278
+  },
+  "environment": {
+    "captured_at_utc": "2026-07-28T19:36:03.485180+00:00",
+    "run_context": "native",
+    "python_version": "3.10.10",
+    "cyclonedds_version": "0.10.4 (built from source, github.com/eclipse-cyclonedds/cyclonedds, not the Ubuntu apt package used in Docker runs)",
+    "measurement_note": "Single host; latency is (central's CLOCK_MONOTONIC at receipt) minus (publisher's CLOCK_MONOTONIC at send). Valid because both processes share the kernel's monotonic clock (ADR-0002) - NOT valid across two physical hosts without PTP or an RTT methodology.",
+    "host_platform": "macOS-26.5.2-x86_64-i386-64bit",
+    "host_machine": "x86_64"
+  }
+}

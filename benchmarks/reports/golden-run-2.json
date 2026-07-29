@@ -1,0 +1,33 @@
+{
+  "run_id": "golden-run-2",
+  "source": "benchmarks/runs/golden-run-2.jsonl",
+  "stats": {
+    "count": 149,
+    "min_us": 14,
+    "max_us": 478,
+    "mean_us": 108.9,
+    "stddev_us": 52.4,
+    "p50_us": 105.0,
+    "p90_us": 165.2,
+    "p95_us": 193.0,
+    "p99_us": 241.6,
+    "p999_us": 443.2
+  },
+  "per_zone_counts": {
+    "front-zone": 149
+  },
+  "environment": {
+    "captured_at_utc": "2026-07-28T20:58:36.384659+00:00",
+    "run_context": "docker-compose",
+    "python_version": "3.10.10",
+    "cyclonedds_version": "0.10.4 (Ubuntu 24.04 apt package, see deploy/Dockerfile)",
+    "measurement_note": "Single host; latency is (central's CLOCK_MONOTONIC at receipt) minus (publisher's CLOCK_MONOTONIC at send). Valid because both processes share the kernel's monotonic clock (ADR-0002) - NOT valid across two physical hosts without PTP or an RTT methodology.",
+    "orchestrating_host_platform": "macOS-26.5.2-x86_64-i386-64bit",
+    "orchestrating_host_machine": "x86_64",
+    "docker_version": "Docker version 20.10.18, build b40c2f6b5d",
+    "docker_compose_version": "Docker Compose version v5.1.4",
+    "docker_daemon_architecture": "aarch64",
+    "docker_daemon_os": "linux / Docker Desktop",
+    "docker_daemon_cpus": "15"
+  }
+}

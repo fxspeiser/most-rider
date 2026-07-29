@@ -55,32 +55,46 @@ def docker_info_field(go_template):
     return tool_version(["docker", "info", "--format", go_template])
 
 
-def gather_environment():
-    return {
+def gather_environment(context, cyclonedds_version):
+    """context: 'docker-compose' (default) or 'native'. The two run
+    contexts have genuinely different authoritative environments — a
+    native run has no docker daemon to query, and hardcoding the Docker
+    image's cyclonedds version into a native report would be a real,
+    misleading inaccuracy (caught by actually running a native benchmark
+    and reading the resulting report — not by inspection)."""
+    base = {
         "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-        # The orchestrating host running this script - may differ from the
-        # container architecture below (e.g. Python under Rosetta on Apple
-        # Silicon reports x86_64 here while containers run native arm64).
-        # NOT the environment the timed code actually ran in - see the
-        # docker_* fields for that.
-        "orchestrating_host_platform": platform.platform(),
-        "orchestrating_host_machine": platform.machine(),
+        "run_context": context,
         "python_version": sys.version.split()[0],
-        "docker_version": tool_version(["docker", "--version"]),
-        "docker_compose_version": tool_version(["docker", "compose", "version"]),
-        # This is the authoritative environment: the daemon that actually
-        # built and ran the timed containers.
-        "docker_daemon_architecture": docker_info_field("{{.Architecture}}"),
-        "docker_daemon_os": docker_info_field("{{.OSType}} / {{.OperatingSystem}}"),
-        "docker_daemon_cpus": docker_info_field("{{.NCPU}}"),
-        "cyclonedds_version": "0.10.4 (Ubuntu 24.04 apt package, see deploy/Dockerfile)",
+        "cyclonedds_version": cyclonedds_version,
         "measurement_note": (
-            "Single Docker host; latency is (central's CLOCK_MONOTONIC at receipt) "
-            "minus (publisher's CLOCK_MONOTONIC at send). Valid because containers "
-            "on one host share the kernel's monotonic clock (ADR-0002) - NOT valid "
+            "Single host; latency is (central's CLOCK_MONOTONIC at receipt) "
+            "minus (publisher's CLOCK_MONOTONIC at send). Valid because both "
+            "processes share the kernel's monotonic clock (ADR-0002) - NOT valid "
             "across two physical hosts without PTP or an RTT methodology."
         ),
     }
+
+    if context == "native":
+        # The orchestrating host IS the run environment for a native run —
+        # no container layer to distinguish it from.
+        base["host_platform"] = platform.platform()
+        base["host_machine"] = platform.machine()
+        return base
+
+    # docker-compose context: the docker daemon is the authoritative
+    # environment, not necessarily this script's host (e.g. Python under
+    # Rosetta on Apple Silicon can report x86_64 here while containers run
+    # native arm64 — see docker_daemon_* below for the environment that
+    # actually ran the timed containers).
+    base["orchestrating_host_platform"] = platform.platform()
+    base["orchestrating_host_machine"] = platform.machine()
+    base["docker_version"] = tool_version(["docker", "--version"])
+    base["docker_compose_version"] = tool_version(["docker", "compose", "version"])
+    base["docker_daemon_architecture"] = docker_info_field("{{.Architecture}}")
+    base["docker_daemon_os"] = docker_info_field("{{.OSType}} / {{.OperatingSystem}}")
+    base["docker_daemon_cpus"] = docker_info_field("{{.NCPU}}")
+    return base
 
 
 def compute_stats(samples):
@@ -162,6 +176,21 @@ def main():
     parser.add_argument("--run-id", required=True, help="Identifier for this run, e.g. golden-run-1")
     parser.add_argument("--out-md", type=Path, required=True, help="Output markdown report path")
     parser.add_argument("--out-json", type=Path, required=True, help="Output JSON summary path")
+    parser.add_argument(
+        "--context", choices=["docker-compose", "docker-single-container", "native"],
+        default="docker-compose",
+        help=(
+            "Run context — changes which environment facts are authoritative "
+            "(default: docker-compose). 'docker-single-container' still discloses "
+            "docker daemon facts (it's still Docker) but is labeled distinctly from "
+            "'docker-compose' (separate containers on the bridge network) — see "
+            "tools/run_linux_process_benchmark.sh."
+        ),
+    )
+    parser.add_argument(
+        "--cyclonedds-version", default="0.10.4 (Ubuntu 24.04 apt package, see deploy/Dockerfile)",
+        help="Cyclone DDS version/provenance string for this run's environment — override for non-Docker contexts",
+    )
     args = parser.parse_args()
 
     samples = load_samples(args.input)
@@ -173,7 +202,7 @@ def main():
     per_zone_counts = {}
     for s in samples:
         per_zone_counts[s["zone"]] = per_zone_counts.get(s["zone"], 0) + 1
-    env = gather_environment()
+    env = gather_environment(args.context, args.cyclonedds_version)
 
     args.out_md.parent.mkdir(parents=True, exist_ok=True)
     args.out_md.write_text(render_markdown(args.run_id, stats, env, per_zone_counts, args.input))

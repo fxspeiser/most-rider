@@ -1,0 +1,33 @@
+# M7: single-container two-process benchmark image — see
+# deploy/linux-process-bench-entrypoint.sh and tools/run_linux_process_benchmark.sh.
+# Same builder pattern as deploy/Dockerfile, but the runtime stage ships
+# BOTH central and zone-runtime (deploy/Dockerfile ships exactly one,
+# selected by the TARGET build arg — this image needs both in one
+# container on purpose).
+FROM ubuntu:24.04 AS builder
+
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+    cyclonedds-dev cyclonedds-tools cmake build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY CMakeLists.txt ./
+COPY interfaces/idl ./interfaces/idl
+COPY middleware ./middleware
+COPY apps ./apps
+
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --target central zone-runtime --parallel
+
+FROM ubuntu:24.04
+
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+    libddsc0t64 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /src/build/central /usr/local/bin/central
+COPY --from=builder /src/build/zone-runtime /usr/local/bin/zone-runtime
+COPY deploy/linux-process-bench-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
