@@ -6,16 +6,18 @@ to design and build it. Both stories are told from the same repository, on
 purpose. See [`project_overview.md`](project_overview.md) for the original
 brief and [`crosscheck/`](crosscheck/) for the second story's evidence.
 
-> **Status: M6 complete — there's a live dashboard now.** All four zones
-> discover each other over Eclipse Cyclone DDS, the M4 fault scenarios all
-> pass (zone kill/restart, a real `tc netem` stale-sensor delay, congestion-
-> with-priority-survival), and **`http://localhost:8282`** now serves a
-> live React dashboard — real-time speed/torque/SoC/power charts, zone
-> health, a diagnostics log, one-click fault injection for all three M4
-> scenarios, and a benchmark summary panel reading real committed report
-> data — alongside the REST/WebSocket/OpenAPI surface from M5 (`/docs`,
-> `/api/*`) and the CLI (`tools/mostrider_cli.py`). See
-> [Quickstart](#quickstart).
+> **Status: M7 complete — the benchmark matrix is real and honestly
+> caveated.** All four zones discover each other over Eclipse Cyclone DDS,
+> the M4 fault scenarios all pass, and **`http://localhost:8282`** serves a
+> live React dashboard on top of the M5 REST/WebSocket/OpenAPI surface. M7
+> adds two native-vs-Docker comparisons (a single-container run isolating
+> bridge-network overhead specifically: p50 ~73-75us vs. ~114-123us for
+> docker-compose; a macOS-native run, disclosed as OS-confounded), CPU/
+> memory capture (a genuinely unexplained ~100% CPU finding, disclosed not
+> hidden), and a real cheap-model documentation-delegation experiment whose
+> most useful result was a **correct rejection** by adversarial review —
+> see [`benchmarks/EXECUTIVE_SUMMARY.md`](benchmarks/EXECUTIVE_SUMMARY.md).
+> See [Quickstart](#quickstart).
 
 ## What this is
 
@@ -110,16 +112,21 @@ python3 tools/mostrider_cli.py fault congestion stop
 See [`scenarios/README.md`](scenarios/README.md) for what each proves and
 why it's built the way it is.
 
-To reproduce the golden-run benchmark report:
+To reproduce the benchmark matrix (M7):
 
 ```bash
-./tools/run_golden_benchmark.sh golden-run-2
+./tools/run_golden_benchmark.sh golden-run-2                # docker-compose baseline (+ CPU/memory)
+./tools/run_linux_process_benchmark.sh linux-single-container  # isolates bridge-network overhead
+./tools/run_native_benchmark.sh native-macos-arm64           # native — OS-confounded, disclosed as such
 ```
 
 See [`benchmarks/methodology.md`](benchmarks/methodology.md) for what's
-measured, what isn't, and the validity boundary (single-host only, for now).
+measured, what isn't, and the validity boundary, and
+[`benchmarks/EXECUTIVE_SUMMARY.md`](benchmarks/EXECUTIVE_SUMMARY.md) for a
+non-technical summary of the findings — including the cheap-model
+delegation experiment that produced it.
 
-## Architecture (M6 snapshot)
+## Architecture (M7 snapshot)
 
 ```
 front-zone  --\
@@ -147,6 +154,12 @@ load-generator --SensorBurst (congestion profile only)------>/   snapshot.json
 discovery (ADR-0005). `load-generator`/`propulsion-monitor` only run for
 the congestion scenario (Compose profile `congestion`).
 
+- **Two native-vs-Docker comparisons, isolating different variables** —
+  a single-container run (same OS/Docker daemon, just no bridge network)
+  and a macOS-native run (disclosed as OS-confounded). CPU/memory captured
+  via `docker stats`, no new instrumentation. Full scope, the two real
+  bugs the tooling caught, and the cheap-model delegation case study:
+  [ADR-0009](crosscheck/adr/0009-benchmark-matrix-scope.md).
 - **Dashboard is React+Vite+TS, served same-origin from `api-bridge`** —
   no CORS, no second port. uPlot for real-time streaming charts, hand-built
   bars for the summary panel (per the dataviz skill's actual method, not a
@@ -207,8 +220,8 @@ the congestion scenario (Compose profile `congestion`).
 | M4 | ✅ done | Priority stack (layers 1-2) + all 3 fault scenarios, each independently verified and reported |
 | M5 | ✅ done | telemetry-bridge + api-bridge: REST/WebSocket/OpenAPI on :8282, CLI, mini-diagnostics, API-triggerable fault injection |
 | M6 | ✅ done | React dashboard on :8282 — real-time charts, zone health, diagnostics log, one-click fault injection, benchmark summary |
-| M7 | next | Honest, reproducible benchmarks |
-| M8 | planned | Crosscheck case study + pitch packaging |
+| M7 | ✅ done | Native-vs-Docker matrix (2 variants), CPU/memory capture, cheap-model delegation experiment (correctly rejected by review) |
+| M8 | next | Crosscheck case study + pitch packaging |
 
 Full milestone detail and what's explicitly cut from v1 (SOME/IP, ROS 2,
 Kubernetes, DDS-Security, ...) lives in the flight-plan ADRs under
